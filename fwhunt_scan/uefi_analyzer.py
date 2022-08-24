@@ -10,23 +10,22 @@ Tools for analyzing UEFI firmware using radare2/rizin
 import json
 import sys
 import uuid
-from multiprocessing import shared_memory
 from types import TracebackType
 from typing import Any, Dict, List, Optional, Type
 
 import rzpipe
 
-import uefi_r2.uefi_smm as uefi_smm
-from uefi_r2.uefi_protocols import GUID_FROM_BYTES, UefiGuid
-from uefi_r2.uefi_tables import (
+import fwhunt_scan.uefi_smm as uefi_smm
+from fwhunt_scan.uefi_protocols import GUID_FROM_BYTES
+from fwhunt_scan.uefi_tables import (
     BS_PROTOCOLS_INFO_64_BIT,
     EFI_BOOT_SERVICES_64_BIT,
     EFI_PEI_SERVICES_32_BIT,
     EFI_RUNTIME_SERVICES_64_BIT,
     OFFSET_TO_SERVICE,
 )
-from uefi_r2.uefi_te import TerseExecutableError, TerseExecutableParser
-from uefi_r2.uefi_types import (
+from fwhunt_scan.uefi_te import TerseExecutableError, TerseExecutableParser
+from fwhunt_scan.uefi_types import (
     ChildSwSmiHandler,
     NvramVariable,
     SwSmiHandler,
@@ -35,7 +34,14 @@ from uefi_r2.uefi_types import (
     UefiProtocolGuid,
     UefiService,
 )
-from uefi_r2.uefi_utils import get_int
+from fwhunt_scan.uefi_utils import get_int
+
+if sys.version_info.major == 3 and sys.version_info.minor >= 8:
+    from multiprocessing import shared_memory
+if sys.version_info.major == 3 and (
+    sys.version_info.minor >= 6 and sys.version_info.minor < 8
+):
+    import shared_memory  # type: ignore # noqa: F811
 
 
 class UefiAnalyzerError(Exception):
@@ -187,7 +193,7 @@ class UefiAnalyzer:
         """Get common image properties (strings)"""
 
         if self._strings is None:
-            self._strings = self._rz.cmdj("izzzj") or []
+            self._strings = self._rz.cmdj("izzj") or []
         return self._strings
 
     @property
@@ -452,7 +458,7 @@ class UefiAnalyzer:
             block_insns = self._rz.cmd("pdbj @ {:#x}".format(bs.address))
             try:
                 block_insns = json.loads(block_insns)
-            except (ValueError, KeyError, TypeError) as _:
+            except (ValueError, KeyError, TypeError):
                 continue
             for insn in block_insns:
                 if "esil" in insn:
@@ -534,16 +540,14 @@ class UefiAnalyzer:
         nvram_vars = list()
         for service in self.runtime_services:
             if service.name in ["GetVariable", "SetVariable"]:
-                # disassemble 8 instructions backward
-                block_insns = self._rz.cmdj("pdj -8 @ {:#x}".format(service.address))
+                # disassemble 16 instructions backward
+                block_insns = self._rz.cmdj("pdj -16 @ {:#x}".format(service.address))
                 name: str = str()
                 p_guid_b: bytes = bytes()
                 for index in range(len(block_insns) - 2, -1, -1):
-                    if "refs" not in block_insns[index]:
+                    if "xrefs_from" not in block_insns[index]:
                         continue
-                    if len(block_insns[index]["refs"]) > 1:
-                        continue
-                    ref_addr = block_insns[index]["refs"][0]["addr"]
+                    ref_addr = block_insns[index]["xrefs_from"][0]["addr"]
                     if "esil" not in block_insns[index]:
                         continue
                     esil = block_insns[index]["esil"].split(",")
@@ -560,7 +564,9 @@ class UefiAnalyzer:
                         and (esil[-3] == "+")
                         and (esil[-4] == "rip")
                     ):
-                        p_guid_b = bytes(self._rz.cmdj("xj 16 @ {:#x}".format(ref_addr)))
+                        p_guid_b = bytes(
+                            self._rz.cmdj("xj 16 @ {:#x}".format(ref_addr))
+                        )
                     if not name:
                         name = "Unknown"
                     if p_guid_b:
@@ -702,7 +708,10 @@ class UefiAnalyzer:
         if "bin" not in summary:
             return summary
 
-        if not self.info["bin"]["class"].startswith("PE"):
+        if not (
+            self.info["bin"]["class"].startswith("PE")
+            or self.info["bin"]["class"].startswith("TE")
+        ):
             return summary
 
         if self.info["bin"]["arch"] == "x86" and self.info["bin"]["bits"] == 32:

@@ -3,11 +3,11 @@
 # pylint: disable=too-many-lines,consider-using-dict-comprehension
 
 """
-Tools for analyzing UEFI firmware using radare2
+Tools for analyzing UEFI firmware and checking UEFI modules with FwHunt rules
 """
 
 from typing import Dict
-from uefi_r2.uefi_types import UefiGuid
+from fwhunt_scan.uefi_types import UefiGuid
 
 PROTOCOLS_GUIDS = [
     UefiGuid(
@@ -6884,6 +6884,9 @@ PROTOCOLS_GUIDS = [
     ),
     UefiGuid("40B09B5A-F0EF-4627-93D527F04B754D05", name="AMT_READY_TO_BOOT_GUID"),
     UefiGuid("10BA6BBE-A97E-41C3-9A07607AD9BD60E5", name="EFI_VLV2_VARIABLE_GUID"),
+    UefiGuid(
+        "BFD02359-8DFE-459A-8B69-A73A6BAFADC0", name="LENOVO_VARIABLE_PROTOCOL_GUID"
+    ),
 ]
 
 GUID_FROM_VALUE: Dict[str, UefiGuid] = dict(

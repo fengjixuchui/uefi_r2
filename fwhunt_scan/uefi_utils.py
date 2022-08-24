@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import rzpipe
 
-from uefi_r2.uefi_protocols import UefiGuid
+from fwhunt_scan.uefi_protocols import UefiGuid
 
 
 def get_int(item: str) -> Optional[int]:
@@ -29,14 +29,14 @@ def get_xrefs_to_guids(rz: rzpipe.open, guids: List[UefiGuid]) -> List[int]:
                 continue
             offset = element["offset"]
 
-            # xrefs = rz.cmd(f"axtj @{offset:x}")
+            # xrefs = rz.cmd(f"axtj @ {offset:x}")
             # this doesn't work in rizin, so needs to be split into two separate steps (seek + axtj)
 
             # seek to GUID location in .data segment
             rz.cmd(f"s {offset:#x}")
 
             # get xrefs
-            xrefs = rz.cmdj(f"axtj")
+            xrefs = rz.cmdj("axtj")
 
             for xref in xrefs:
                 if "from" not in xref:
@@ -55,7 +55,7 @@ def get_xrefs_to_data(rz: rzpipe.open, addr: int) -> List[int]:
     rz.cmd(f"s {addr:#x}")
 
     # get xrefs
-    xrefs = rz.cmdj(f"axtj")
+    xrefs = rz.cmdj("axtj")
 
     for xref in xrefs:
         if "from" not in xref:
